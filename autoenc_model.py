@@ -5,7 +5,7 @@ from tensorflow import keras
 from keras import layers
 
 
-def gen_autoenc_model(latent_size, optim="adam", loss="mse"):
+def gen_autoenc_model(latent_size, optim="adam", loss="mse", verbose=True):
     input_img = keras.Input(shape=[256,256,1])
 
     x = input_img
@@ -22,14 +22,12 @@ def gen_autoenc_model(latent_size, optim="adam", loss="mse"):
     x = layers.MaxPooling2D()(x)
 
     x = layers.Flatten()(x)
-    x = layers.Dropout(0.2)(x)
-    x = layers.Dense(128, activation="relu")(x)
     x = layers.Dropout(0.1)(x)
     encoded = layers.Dense(latent_size, activation="sigmoid")(x)
 
-    x = layers.Dense(256, activation="relu")(encoded)
-
-    x = layers.Reshape([8, 8, 4])(x)
+    x = layers.Dropout(0.1)(encoded)
+    x = layers.Dense(1024, activation="relu")(x)
+    x = layers.Reshape([8, 8, 16])(x)
     x = layers.UpSampling2D()(x)
 
     x = layers.Conv2D(64, 3, activation="relu", padding='same', strides=1)(x)
@@ -49,12 +47,12 @@ def gen_autoenc_model(latent_size, optim="adam", loss="mse"):
 
     encoder = keras.Model(input_img, encoded)
     decoder = keras.Model(encoded, decoded)
-    print(encoder.summary())
-    decoder.summary()
-
-
     autoencoder = keras.Model(input_img, decoder(encoder(input_img)))
     autoencoder.compile(loss=loss, optimizer=optim, metrics=["mae"])
-    autoencoder.summary()
+
+    if verbose:
+        print(encoder.summary())
+        print(decoder.summary())
+        print(autoencoder.summary())
     
     return autoencoder, encoder, decoder
