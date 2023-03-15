@@ -11,20 +11,41 @@ import sunpy.map
 # https://mahmoudyusof.github.io/facial-keypoint-detection/data-generator/
 
 class SunImgAEGenerator(tf.keras.utils.Sequence):
-    def __init__(self, directory, batch_size, test_split=0.2, shuffle=True):
+    def __init__(self, directory, batch_size, test_split=0.2, shuffle=True, noise_filter=False):
+        
+        # Get all the files in the directory
         self.directory = directory
         self.file_list = os.listdir(self.directory)
         self.file_list = list(map(lambda x: directory + x, self.file_list))
+
+        # Remove noisy images if the flag is set 
+        if noise_filter:
+            noise_imgs = []
+            with open("noisy_193A.csv", "r") as f:
+                noise_imgs = f.readlines()
+
+            self.file_list = [i for i in self.file_list if i not in noise_imgs]
+
+        # Shuffle data if the flag is set
         self.shuffle = shuffle
         if self.shuffle:
             random.shuffle(self.file_list)
+        
+        
+        
+        # Make train-test division
         self.train_list = self.file_list[:int(len(self.file_list)*(1-test_split))]
         self.test_list = self.file_list[int(len(self.file_list)*test_split):]
-        self.training = True
+
         self.batch_size = batch_size
+        self.training = True
         self.take_all = False
     
-    def sample(self, k):        
+    def sample(self, k):
+        """
+        Take a random sample from the dataset, primarily made for visualization and quick tests
+        """
+
         idx = np.random.permutation(len(self.file_list))[:k]
         batch_maps = sunpy.map.Map([self.file_list[i] for i in idx])
         img_matrix = np.array(list(d.data for d in batch_maps))
