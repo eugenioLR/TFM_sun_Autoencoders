@@ -25,4 +25,11 @@ def spearman_mat(matrix, target):
 
 
 def range_tuple(matrix):
-    return matrix.min(), matrix.max()
+    return np.nanmin(matrix), np.nanmax(matrix)
+
+def chunks(l, chunk_size):
+    chunk = []
+    for i in range(0, len(l), chunk_size):
+        chunk = l[i:i+chunk_size]
+        yield chunk
+    return None

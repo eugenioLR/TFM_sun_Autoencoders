@@ -23,8 +23,10 @@ class SunImgAEGenerator(tf.keras.utils.Sequence):
             noise_imgs = []
             with open("noisy_193A.csv", "r") as f:
                 noise_imgs = f.readlines()
+            
+            noise_imgs = list(map(lambda x: x.strip(), noise_imgs))
 
-            self.file_list = [i for i in self.file_list if i not in noise_imgs]
+            self.file_list = [f for f in self.file_list if f not in noise_imgs]
 
         # Shuffle data if the flag is set
         self.shuffle = shuffle

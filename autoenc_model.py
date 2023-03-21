@@ -5,7 +5,7 @@ from tensorflow import keras
 from keras import layers
 
 
-def gen_autoenc_model(latent_size, optim="adam", loss="mse", verbose=True):
+def gen_autoenc_model_1c(latent_size, optim="adam", loss="mse", verbose=True):
     input_img = keras.Input(shape=[256,256,1])
 
     x = input_img
