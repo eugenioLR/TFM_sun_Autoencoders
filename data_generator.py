@@ -56,7 +56,7 @@ class SunImgAEGenerator(tf.keras.utils.Sequence):
         max_values = img_matrix.max(axis=2, keepdims=True).max(axis=1, keepdims=True)
 
         rg = max_values - min_values
-        rg = np.maximum(rg, 1e-4*np.ones(rg.shape))
+        rg = np.fmax(rg, 1e-4*np.ones(rg.shape))
 
         print(rg.shape, min_values.shape, max_values.shape)
         img_matrix = (img_matrix-min_values) / rg
@@ -89,7 +89,7 @@ class SunImgAEGenerator(tf.keras.utils.Sequence):
         max_values = img_matrix.max(axis=2, keepdims=True).max(axis=1, keepdims=True)
 
         rg = max_values - min_values
-        rg = np.maximum(rg, 1e-4*np.ones(rg.shape))
+        rg = np.fmax(rg, 1e-4*np.ones(rg.shape))
 
         img_matrix = (img_matrix-min_values) / rg
 
