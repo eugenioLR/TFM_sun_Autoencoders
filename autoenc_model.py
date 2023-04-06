@@ -4,6 +4,9 @@ import tensorflow as tf
 from tensorflow import keras
 from keras import layers
 
+import utils
+from utils import CylindricalPadding2D
+
 
 def gen_autoenc_model_1c(latent_size, optim="adam", loss="mse", verbose=True):
     input_img = keras.Input(shape=[256,256,1])
@@ -28,7 +31,9 @@ def gen_autoenc_model_1c(latent_size, optim="adam", loss="mse", verbose=True):
     x = layers.Dropout(0.1)(encoded)
     x = layers.Dense(1024, activation="relu")(x)
     x = layers.Reshape([8, 8, 16])(x)
-    x = layers.UpSampling2D()(x)
+    
+    x = layers.Conv2D(64, 3, activation="relu", padding='same', strides=1)(x)
+    x = layers.Conv2DTranspose(64, 3, activation="relu", padding='same', strides=2)(x)
 
     x = layers.Conv2D(64, 3, activation="relu", padding='same', strides=1)(x)
     x = layers.Conv2DTranspose(64, 3, activation="relu", padding='same', strides=2)(x)
@@ -200,22 +205,6 @@ def gen_base_xception_autoenc_3c(latent_size, optim="adam", loss="mse", verbose=
     
     return autoencoder, encoder, decoder
 
-class CylindricalPadding2D(keras.layers.Layer):
-    """
-    Cylindrical colvolution: https://stackoverflow.com/questions/54911015/keras-convolution-layer-on-images-coming-from-circular-cyclic-domain
-    """
-
-    def __init__(self, offset, axis=2, input_dim=32):
-        super().__init__()
-        self.offset = tf.constant(offset)
-        self.axis = tf.constant(axis)
-
-    def call(self, inputs):
-        extra_right = inputs[:, :, -self.offset:, :]
-        extra_left = inputs[:, :, :self.offset, :]
-        return tf.concat([extra_right, inputs, extra_left], axis=self.axis)
-
-
 def gen_xception_autoenc_3c(latent_size, optim="adam", loss="mse", cylindical=True, verbose=True):
     
 
@@ -226,7 +215,7 @@ def gen_xception_autoenc_3c(latent_size, optim="adam", loss="mse", cylindical=Tr
     x = input_img
 
     if cylindical:
-        x = CylindricalPadding2D(1)(x)
+        x = CylindricalPadding2D(5)(x)
     
     x = layers.Conv2D(32, (3,3), strides=(2,2), use_bias=False)(x)
     x = layers.BatchNormalization(axis=channel_axis)(x)
@@ -267,37 +256,37 @@ def gen_xception_autoenc_3c(latent_size, optim="adam", loss="mse", cylindical=Tr
     x = layers.add([x, residual]) 
 
 
-    # residual = layers.Conv2D(728, (1,1), strides=(2,2), padding="same", use_bias=False)(x)
-    # residual = layers.BatchNormalization(axis=channel_axis)(residual)
+    # comment After this
+    residual = layers.Conv2D(728, (1,1), strides=(2,2), padding="same", use_bias=False)(x)
+    residual = layers.BatchNormalization(axis=channel_axis)(residual)
 
-    # x = layers.SeparableConv2D(728, (3,3), padding="same", use_bias=False)(x)
-    # x = layers.BatchNormalization(axis=channel_axis)(x)
+    x = layers.SeparableConv2D(728, (3,3), padding="same", use_bias=False)(x)
+    x = layers.BatchNormalization(axis=channel_axis)(x)
 
-    # x = layers.Activation("relu")(x)
-    # x = layers.SeparableConv2D(728, (3,3), padding="same", use_bias=False)(x)
-    # x = layers.BatchNormalization(axis=channel_axis)(x)
+    x = layers.Activation("relu")(x)
+    x = layers.SeparableConv2D(728, (3,3), padding="same", use_bias=False)(x)
+    x = layers.BatchNormalization(axis=channel_axis)(x)
 
-    # x = layers.MaxPooling2D((3,3), strides=(2,2), padding="same")(x)
+    x = layers.MaxPooling2D((3,3), strides=(2,2), padding="same")(x)
 
-    # x = layers.add([x, residual])
+    x = layers.add([x, residual])
 
     
     for i in range(8):
         residual = x
 
         x = layers.Activation("relu")(x)
-        # x = layers.SeparableConv2D(728, (3,3), padding="same", use_bias=False)(x)
-        x = layers.SeparableConv2D(256, (3,3), padding="same", use_bias=False)(x)
+        x = layers.SeparableConv2D(728, (3,3), padding="same", use_bias=False)(x)
         x = layers.BatchNormalization(axis=channel_axis)(x)
 
         x = layers.Activation("relu")(x)
-        # x = layers.SeparableConv2D(728, (3,3), padding="same", use_bias=False)(x)
-        x = layers.SeparableConv2D(256, (3,3), padding="same", use_bias=False)(x)
+        x = layers.SeparableConv2D(728, (3,3), padding="same", use_bias=False)(x)
         x = layers.BatchNormalization(axis=channel_axis)(x)
 
-        # x = layers.Activation("relu")(x)
-        # x = layers.SeparableConv2D(728, (3,3), padding="same", use_bias=False)(x)
-        # x = layers.BatchNormalization(axis=channel_axis)(x)
+        # Comment this
+        x = layers.Activation("relu")(x)
+        x = layers.SeparableConv2D(728, (3,3), padding="same", use_bias=False)(x)
+        x = layers.BatchNormalization(axis=channel_axis)(x)
 
         x = layers.add([x, residual])
     
@@ -348,8 +337,6 @@ def gen_xception_autoenc_3c(latent_size, optim="adam", loss="mse", cylindical=Tr
     x = layers.Conv2DTranspose(3, 3, activation="relu", padding='same', strides=(1,2))(x)
 
     x = layers.Cropping2D(((28,0),(152,0)))(x)
-    x = layers.Conv2D(3, 3, activation="relu", padding='same', strides=1)(x)
-    x = layers.Conv2D(3, 3, activation="relu", padding='same', strides=1)(x)
 
     decoded = x
 
