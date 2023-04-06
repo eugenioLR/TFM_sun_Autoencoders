@@ -8,6 +8,9 @@ from astropy.wcs.utils import skycoord_to_pixel
 from skimage.transform import warp_polar
 from scipy.ndimage import map_coordinates
 
+import tensorflow as tf
+from tensorflow import keras
+
 
 def pearson_mat(matrix, target):
     """
@@ -108,6 +111,23 @@ def polar_linear(img, o=None, r=None, output=None, order=1, cont=0, cval=0):
         output = np.flip(output, axis=0)
 
     return output
+
+
+class CylindricalPadding2D(keras.layers.Layer):
+    """
+    Cylindrical colvolution: https://stackoverflow.com/questions/54911015/keras-convolution-layer-on-images-coming-from-circular-cyclic-domain
+    """
+
+    def __init__(self, offset, axis=2, input_dim=32):
+        super().__init__()
+        self.offset = tf.constant(offset)
+        self.axis = tf.constant(axis)
+
+    def call(self, inputs):
+        extra_right = inputs[:, :, -self.offset:, :]
+        extra_left = inputs[:, :, :self.offset, :]
+        return tf.concat([extra_right, inputs, extra_left], axis=self.axis)
+
 
 
     
