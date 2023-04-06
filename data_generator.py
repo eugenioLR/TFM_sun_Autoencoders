@@ -7,16 +7,14 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras.utils import Sequence, load_img, img_to_array
 import sunpy.map
+import pathlib
+
 
 # https://mahmoudyusof.github.io/facial-keypoint-detection/data-generator/
 
 class SunImgAEGenerator(tf.keras.utils.Sequence):
     def __init__(self, directory, batch_size, test_split=0.2, shuffle=True, noise_filter=False):
-        
-        # Get all the files in the directory
-        self.directory = directory
-        self.file_list = os.listdir(self.directory)
-        self.file_list = list(map(lambda x: directory + x, self.file_list))
+        self.file_list = list(pathlib.Path(directory).iterdir())
 
         # Remove noisy images if the flag is set 
         if noise_filter:
@@ -24,20 +22,19 @@ class SunImgAEGenerator(tf.keras.utils.Sequence):
             with open("noisy_193A.csv", "r") as f:
                 noise_imgs = f.readlines()
             
-            noise_imgs = list(map(lambda x: x.strip(), noise_imgs))
+            noise_imgs = [pathlib.Path(i.strip()).stem for i in noise_imgs]
 
-            self.file_list = [f for f in self.file_list if f not in noise_imgs]
+            self.file_list = [f for f in self.file_list if f.stem not in noise_imgs]
 
         # Shuffle data if the flag is set
         self.shuffle = shuffle
         if self.shuffle:
-            random.shuffle(self.file_list)
-        
-        
+            random.shuffle(self.file_list)        
         
         # Make train-test division
-        self.train_list = self.file_list[:int(len(self.file_list)*(1-test_split))]
-        self.test_list = self.file_list[int(len(self.file_list)*test_split):]
+        split_point = int(len(self.file_list)*test_split)
+        self.train_list = self.file_list[:len(self.file_list)-split_point]
+        self.test_list = self.file_list[split_point:]
 
         self.batch_size = batch_size
         self.training = True
@@ -56,7 +53,6 @@ class SunImgAEGenerator(tf.keras.utils.Sequence):
         data_matrix = (data_matrix-min_values) / rg
 
         return data_matrix
-
     
     def sample(self, k):
         """
@@ -65,8 +61,7 @@ class SunImgAEGenerator(tf.keras.utils.Sequence):
 
         idx = np.random.permutation(len(self.file_list))[:k]
         batch_maps = sunpy.map.Map([self.file_list[i] for i in idx])
-        img_matrix = np.array(list(d.data for d in batch_maps))
-
+        img_matrix = np.array([d.data for d in batch_maps])
         img_matrix = self.normalize(img_matrix)
 
         return img_matrix
@@ -90,7 +85,7 @@ class SunImgAEGenerator(tf.keras.utils.Sequence):
             batch_maps = sunpy.map.Map(self.train_list[idx * self.batch_size: (idx + 1) * self.batch_size])
         else:
             batch_maps = sunpy.map.Map(self.test_list[idx * self.batch_size: (idx + 1) * self.batch_size])
-        img_matrix = np.array(list(d.data for d in batch_maps))
+        img_matrix = np.array([d.data for d in batch_maps])
 
         img_matrix = self.normalize(img_matrix)
 
@@ -107,7 +102,7 @@ class SunImgAE3CGenerator(SunImgAEGenerator):
     def normalize(data_matrix):
         data_matrix[:,:,:,0] = np.clip(data_matrix[:,:,:,0], 0, 5000)
         data_matrix[:,:,:,1] = np.clip(data_matrix[:,:,:,1], 0, 3000)
-        # data_matrix[:,:,:,2] = np.clip(data_matrix[:,:,:,2], -400, 400)
+        data_matrix[:,:,:,2] = np.clip(data_matrix[:,:,:,2], -400, 400)
 
         min_values = np.nanmin(np.nanmin(data_matrix, axis=2, keepdims=True), axis=1, keepdims=True)
         max_values = np.nanmax(np.nanmax(data_matrix, axis=2, keepdims=True), axis=1, keepdims=True)
@@ -115,16 +110,17 @@ class SunImgAE3CGenerator(SunImgAEGenerator):
         rg = max_values - min_values
         rg = np.fmax(rg, 1e-4)
 
-        data_matrix = (data_matrix-min_values) / rg
+        data_matrix_norm = (data_matrix-min_values) / rg
 
         # Normalize HMI magnetogram data differently
-        data_matrix[:,:,:,2] = np.clip(data_matrix[:,:,:,2], -400, 400)
         hmi_max_values = np.nanmax(np.nanmax(np.abs(data_matrix[:,:,:,2]), axis=2, keepdims=True), axis=1, keepdims=True)
-        data_matrix[:,:,:,2] = ((data_matrix[:,:,:,2] / hmi_max_values) + 1)/2
+        data_matrix_norm[:,:,:,2] = ((data_matrix[:,:,:,2] / hmi_max_values) + 1)/2
 
-        data_matrix[np.isnan(data_matrix)] = 0
+        # data_matrix_norm = (data_matrix_norm*2)-1
 
-        return data_matrix    
+        data_matrix_norm[np.isnan(data_matrix_norm)] = 0
+
+        return data_matrix_norm    
 
     def sample(self, k):
         """
@@ -132,10 +128,17 @@ class SunImgAE3CGenerator(SunImgAEGenerator):
         """
 
         idx = np.random.permutation(len(self.file_list))[:k]
-        batch_maps = sunpy.map.Map([self.file_list[i] for i in idx])
-        img_matrix = np.array(list(d.data for d in batch_maps))
 
-        img_matrix = self._normalize(img_matrix)
+        batch_files = [self.file_list[i] for i in idx]
+        img_matrix = np.empty([len(batch_files), 100, 360, 3])
+        for idx, data_file in enumerate(batch_files):
+            data_point = np.load(data_file)
+            if data_point.shape[0] == 100:
+                img_matrix[idx] = data_point
+            else:
+                print(data_point.shape, data_file)
+
+        img_matrix = self.normalize(img_matrix)
 
         return img_matrix
 
@@ -151,28 +154,35 @@ class SunImgAE3CGenerator(SunImgAEGenerator):
         
         return length//self.batch_size
 
-
     def __getitem__(self, idx):
         if self.take_all:
-            batch_maps = sunpy.map.Map(self.file_list[idx * self.batch_size: (idx + 1) * self.batch_size])            
+            batch_files = self.file_list[idx * self.batch_size: (idx + 1) * self.batch_size]
         elif self.training:
-            batch_maps = sunpy.map.Map(self.train_list[idx * self.batch_size: (idx + 1) * self.batch_size])
+            batch_files = self.train_list[idx * self.batch_size: (idx + 1) * self.batch_size]
         else:
-            batch_maps = sunpy.map.Map(self.test_list[idx * self.batch_size: (idx + 1) * self.batch_size])
-        img_matrix = np.array(list(d.data for d in batch_maps))
+            batch_files = self.test_list[idx * self.batch_size: (idx + 1) * self.batch_size]
+
+        img_matrix = np.empty([len(batch_files), 100, 360, 3])
+        for idx, data_file in enumerate(batch_files):
+            data_point = np.load(data_file)
+            if data_point.shape[0] == 100:
+                img_matrix[idx] = data_point
+            else:
+                print(data_point.shape, data_file)
 
         img_matrix = self.normalize(img_matrix)
 
         return img_matrix, img_matrix
 
-    
     def on_epoch_end(self):
         if self.shuffle:
             random.shuffle(self.train_list)
             random.shuffle(self.test_list)
 
 if __name__ == "__main__":
-    datagen = SunImgAEGenerator("data/aia_193A/", 256, test_split=0.2, shuffle=True)
+    # datagen = SunImgAEGenerator("data/aia_193A/", 256, test_split=0.2, shuffle=True, noise_filter=True)
+    datagen = SunImgAE3CGenerator("data/composite_data/", 256, test_split=0.2, shuffle=True, noise_filter=True)
 
-    print(datagen.__getitem__(80))
-    print(len(datagen))
+    # print(datagen.__getitem__(8))
+    # print(len(datagen))
+    print(datagen.sample(2))

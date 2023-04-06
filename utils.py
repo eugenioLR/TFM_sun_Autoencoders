@@ -10,6 +10,7 @@ from scipy.ndimage import map_coordinates
 
 import tensorflow as tf
 from tensorflow import keras
+import tensorflow_addons as tfa
 
 
 def pearson_mat(matrix, target):
@@ -66,12 +67,10 @@ def map_to_polar(sun_map, out_shape = (360,100)):
     return polar_map
 
 
-def polar_linear(img, o=None, r=None, output=None, order=1, cont=0, cval=0):
+def polar_to_linear(img, o=None, r=None, output=None, order=1, cont=0, cval=0):
     """
     Taken from https://forum.image.sc/t/polar-transform-and-inverse-transform/40547/2
-    """
-
-    
+    """    
 
     if img.ndim == 3:
         if r is None: 
@@ -113,6 +112,29 @@ def polar_linear(img, o=None, r=None, output=None, order=1, cont=0, cval=0):
     return output
 
 
+# def polar_to_linear_tf(img_input, radius):
+#     h, w = radius, radius
+
+#     r, theta = tf.meshgrid(tf.linspace(0.0, radius, w), tf.linspace(0.0, 2.0*np.pi, h))
+
+#     x, y = tf.meshgrid(tf.linspace(0.0, radius, w), tf.linspace(0.0, radius, h))
+
+#     r = tf.cast(r, tf.float64)
+#     theta = tf.cast(theta, tf.float64)
+#     x = tf.cast(x, tf.float64)
+#     y = tf.cast(y, tf.float64)
+
+#     src_coords = tf.reshape(tf.stack([r, theta], axis=-1), [1, 2, -1])
+#     dst_coords = tf.reshape(tf.stack([x, y], axis=-1), [1, 2, -1])
+
+#     print(src_coords)
+#     print(dst_coords)
+
+#     interpolated = tfa.image.sparse_image_warp(img_input, src_coords, dst_coords) #?
+
+#     return interpolated
+
+
 class CylindricalPadding2D(keras.layers.Layer):
     """
     Cylindrical colvolution: https://stackoverflow.com/questions/54911015/keras-convolution-layer-on-images-coming-from-circular-cyclic-domain
@@ -129,5 +151,34 @@ class CylindricalPadding2D(keras.layers.Layer):
         return tf.concat([extra_right, inputs, extra_left], axis=self.axis)
 
 
+def test_cylinder():
+    input_img = keras.Input(shape=[3,12,1])
 
-    
+    x = input_img
+    x = CylindricalPadding2D(3)(x)
+
+    model = keras.Model(input_img, x)
+
+    test = np.array([range(12),range(0,24,2),range(0,36,3)]).reshape((1,3,12,1))
+    result = model(test)[0,:,:,0]
+
+    print("\n- Original")
+    print(np.asarray(test[0,:,:,0]).astype(int))
+
+    print("\n- Cylindical Padding x3")
+    print(np.asarray(result).astype(int))
+
+def test_polar_linear():
+    import matplotlib.pyplot as plt
+
+    zebra = np.tile([1,0], 50*360).reshape([100,360]).T
+    plt.imshow(zebra, cmap="Greys")
+    plt.show()
+
+    circle_zebra = polar_to_linear(zebra)
+    plt.imshow(circle_zebra, cmap="Greys")
+    plt.show()
+
+if __name__ == "__main__":
+    test_cylinder()
+    # test_polar_linear()
