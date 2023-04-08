@@ -116,8 +116,6 @@ class SunImgAE3CGenerator(SunImgAEGenerator):
         hmi_max_values = np.nanmax(np.nanmax(np.abs(data_matrix[:,:,:,2]), axis=2, keepdims=True), axis=1, keepdims=True)
         data_matrix_norm[:,:,:,2] = ((data_matrix[:,:,:,2] / hmi_max_values) + 1)/2
 
-        # data_matrix_norm = (data_matrix_norm*2)-1
-
         data_matrix_norm[np.isnan(data_matrix_norm)] = 0
 
         return data_matrix_norm    
@@ -133,10 +131,7 @@ class SunImgAE3CGenerator(SunImgAEGenerator):
         img_matrix = np.empty([len(batch_files), 100, 360, 3])
         for idx, data_file in enumerate(batch_files):
             data_point = np.load(data_file)
-            if data_point.shape[0] == 100:
-                img_matrix[idx] = data_point
-            else:
-                print(data_point.shape, data_file)
+            img_matrix[idx] = data_point
 
         img_matrix = self.normalize(img_matrix)
 
@@ -165,10 +160,7 @@ class SunImgAE3CGenerator(SunImgAEGenerator):
         img_matrix = np.empty([len(batch_files), 100, 360, 3])
         for idx, data_file in enumerate(batch_files):
             data_point = np.load(data_file)
-            if data_point.shape[0] == 100:
-                img_matrix[idx] = data_point
-            else:
-                print(data_point.shape, data_file)
+            img_matrix[idx] = data_point
 
         img_matrix = self.normalize(img_matrix)
 
@@ -179,10 +171,16 @@ class SunImgAE3CGenerator(SunImgAEGenerator):
             random.shuffle(self.train_list)
             random.shuffle(self.test_list)
 
-if __name__ == "__main__":
-    # datagen = SunImgAEGenerator("data/aia_193A/", 256, test_split=0.2, shuffle=True, noise_filter=True)
-    datagen = SunImgAE3CGenerator("data/composite_data/", 256, test_split=0.2, shuffle=True, noise_filter=True)
+def test_1c_gen():
+    datagen = SunImgAEGenerator("data/aia_193A/", 256, test_split=0.2, shuffle=True, noise_filter=True)
+    datagen.__getitem__(8)
+    datagen.sample(2)
 
-    # print(datagen.__getitem__(8))
-    # print(len(datagen))
-    print(datagen.sample(2))
+def test_3c_gen():
+    datagen = SunImgAE3CGenerator("data/composite_data/", 256, test_split=0.2, shuffle=True, noise_filter=True)
+    datagen.__getitem__(8)
+    datagen.sample(2)
+
+if __name__ == "__main__":
+    test_1c_gen()
+    test_3c_gen()
