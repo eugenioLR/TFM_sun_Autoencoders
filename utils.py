@@ -1,4 +1,5 @@
 import numpy as np
+import sympy
 
 import astropy
 import astropy.units as u
@@ -135,6 +136,67 @@ def linear_to_polar_tf(img_input, radius):
     out_image = img_input[tf.cast(i, tf.int32), tf.cast(i, tf.int32)]
     return out_image
 
+
+def sqauare_dims(size, ratio_w_h=1):
+    divs = np.array(sympy.divisors(size))
+    dist_to_root = np.abs(divs-np.sqrt(size)*ratio_w_h)
+    i = np.argmin(dist_to_root)
+    x_size = int(divs[i])
+    y_size = size//x_size
+    return (x_size, y_size) if x_size < y_size else (y_size, x_size)
+
+
+def square_dims_vector(vector, ratio_w_h=1):
+    return np.reshape(vector.copy(), sqauare_dims(vector.size, ratio_w_h))
+
+
+
+# @numba.njit
+def abs_max_filter(img, kernel_size=3):
+    pad_extra = kernel_size//2
+    img_copy = img.copy()
+    img_padded = np.zeros((img.shape[0]+2*pad_extra, img.shape[1]+2*pad_extra))
+    img_padded[pad_extra:img.shape[0]+pad_extra, pad_extra:img.shape[1]+pad_extra] = img
+
+    # kernel_base = np.empty((kernel_size, kernel_size))
+    for row in range(img.shape[0]):
+        for col in range(img.shape[1]):
+            k_row_start = row + pad_extra
+            k_row_end = row + pad_extra + kernel_size
+
+            k_col_start = col + pad_extra
+            k_col_end = col + pad_extra + kernel_size
+
+            kernel = img_padded[k_row_start:k_row_end, k_col_start:k_col_end].flatten()
+            
+            abs_max_idx = np.argmax(np.abs(kernel))
+            img_copy[row, col] = kernel[abs_max_idx]
+    return img_copy
+
+# @numba.jit
+def abs_max_filter_par(img, kernel_size=3):
+    pad_extra = kernel_size//2
+    img_padded = np.zeros((img.shape[0], img.shape[1] + 2*pad_extra, img.shape[2] + 2*pad_extra))
+    img_padded[:, pad_extra:img.shape[1] + pad_extra, pad_extra:img.shape[2] + pad_extra] = img
+
+    kernel = np.empty((img.shape[0], kernel_size*kernel_size))
+    for row in range(img.shape[1]):
+        for col in range(img.shape[2]):
+            k_row_start = row
+            k_row_end = row + kernel_size
+
+            k_col_start = col
+            k_col_end = col + kernel_size
+
+            kernel = img_padded[:, k_row_start:k_row_end, k_col_start:k_col_end].copy()
+
+            kernel_flat = kernel.reshape((img.shape[0], kernel_size**2))
+
+            abs_max_idx = np.argmax(np.abs(kernel_flat), axis=1)
+
+            img[:, row, col] = kernel_flat[np.arange(kernel_flat.shape[0]), abs_max_idx]
+    return img
+
 @keras.utils.register_keras_serializable()
 class CylindricalPadding2D(keras.layers.Layer):
     """
@@ -196,6 +258,7 @@ def test_polar_linear():
     circle_zebra = linear_to_polar_tf(zebra, 100)
     plt.imshow(circle_zebra, cmap="Greys")
     plt.show()
+
 
 if __name__ == "__main__":
     test_cylinder()
