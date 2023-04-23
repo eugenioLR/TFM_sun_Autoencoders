@@ -48,7 +48,7 @@ def chunks(l, chunk_size):
     
     return None
 
-def map_to_polar(sun_map, out_shape = (360,100)):
+def sunpy_map_to_polar(sun_map, out_shape = (360,100)):
 
     # get origin and leftmost point of the solar disk in arcseconds
     origin = SkyCoord(0*u.arcsec, 0*u.arcsec, frame=sun_map.coordinate_frame)
@@ -67,48 +67,58 @@ def map_to_polar(sun_map, out_shape = (360,100)):
 
     return polar_map
 
+def cartesian_to_polar(img, radius=None, out_shape = (360,100)):
+    if radius is None:
+        radius = img.shape[0]//2
+    polar_img = warp_polar(img, radius=radius, output_shape=out_shape)
+    polar_img = np.rot90(polar_img, -1) # put the center on the bottom
 
-def polar_to_linear(img, o=None, r=None, output=None, order=1, cont=0, cval=0):
+    return polar_img
+
+
+def polar_to_cartesian_channels(img, o=None, r=None, output=None, order=1, cont=0, cval=0):
+    if r is None: 
+        r = img.shape[0]
+
+    output_original = output
+
+    if output is None:
+        output = np.zeros((r*2, r*2, img.shape[2]), dtype=img.dtype)
+    elif isinstance(output, tuple):
+        output = np.zeros(output, dtype=img.dtype)
+
+    for i in range(img.shape[2]):
+        output[:,:,i] = polar_to_cartesian(img[:,:,i], o, r, output_original, order, cont, cval)
+    
+    return output
+
+
+def polar_to_cartesian(img, o=None, r=None, output=None, order=1, cont=0, cval=0):
     """
     Taken from https://forum.image.sc/t/polar-transform-and-inverse-transform/40547/2
-    """    
+    """
+    
+    if r is None: 
+        r = img.shape[0]
 
-    if img.ndim == 3:
-        if r is None: 
-            r = img.shape[0]
+    if output is None:
+        output = np.zeros((r*2, r*2), dtype=img.dtype)
+    elif isinstance(output, tuple):
+        output = np.zeros(output, dtype=img.dtype)
 
-        output_original = output
+    if o is None: 
+        o = np.array(output.shape)/2 - 0.5
 
-        if output is None:
-            output = np.zeros((r*2, r*2, img.shape[2]), dtype=img.dtype)
-        elif isinstance(output, tuple):
-            output = np.zeros(output, dtype=img.dtype)
+    out_h, out_w = output.shape
+    ys, xs = np.mgrid[:out_h, :out_w] - o[:,None,None]
+    rs = (ys**2+xs**2)**0.5
+    ts = np.arccos(xs/rs)
+    ts[ys<0] = np.pi*2 - ts[ys<0]
+    ts *= (img.shape[1]-1)/(np.pi*2)
 
-        for i in range(img.shape[2]):
-            output[:,:,i] = polar_linear(img[:,:,i], o, r, output_original, order, cont, cval)
-            
-    elif img.ndim == 2:
-        if r is None: 
-            r = img.shape[0]
+    map_coordinates(img, (rs, ts), order=order, output=output, cval=cval)
 
-        if output is None:
-            output = np.zeros((r*2, r*2), dtype=img.dtype)
-        elif isinstance(output, tuple):
-            output = np.zeros(output, dtype=img.dtype)
-
-        if o is None: 
-            o = np.array(output.shape)/2 - 0.5
-
-        out_h, out_w = output.shape
-        ys, xs = np.mgrid[:out_h, :out_w] - o[:,None,None]
-        rs = (ys**2+xs**2)**0.5
-        ts = np.arccos(xs/rs)
-        ts[ys<0] = np.pi*2 - ts[ys<0]
-        ts *= (img.shape[1]-1)/(np.pi*2)
-
-        map_coordinates(img, (rs, ts), order=order, output=output, cval=cval)
-
-        output = np.flip(output, axis=0)
+    output = np.flip(output, axis=0)
 
     return output
 
@@ -152,34 +162,34 @@ def square_dims_vector(vector, ratio_w_h=1):
 
 
 # @numba.njit
-def abs_max_filter(img, kernel_size=3):
+def abs_max_filter(img, kernel_size=3, cval = 0):
     pad_extra = kernel_size//2
-    img_copy = img.copy()
-    img_padded = np.zeros((img.shape[0]+2*pad_extra, img.shape[1]+2*pad_extra))
+    img_padded = np.full((img.shape[0] + 2*pad_extra, img.shape[1] + 2*pad_extra), cval, dtype=np.float64)
     img_padded[pad_extra:img.shape[0]+pad_extra, pad_extra:img.shape[1]+pad_extra] = img
 
-    # kernel_base = np.empty((kernel_size, kernel_size))
+    kernel = np.empty(kernel_size*kernel_size, dtype=np.float64)
     for row in range(img.shape[0]):
         for col in range(img.shape[1]):
-            k_row_start = row + pad_extra
-            k_row_end = row + pad_extra + kernel_size
+            k_row_start = row
+            k_row_end = row + kernel_size
 
-            k_col_start = col + pad_extra
-            k_col_end = col + pad_extra + kernel_size
+            k_col_start = col
+            k_col_end = col + kernel_size
 
             kernel = img_padded[k_row_start:k_row_end, k_col_start:k_col_end].flatten()
             
             abs_max_idx = np.argmax(np.abs(kernel))
-            img_copy[row, col] = kernel[abs_max_idx]
-    return img_copy
+            img[row, col] = kernel[abs_max_idx]
+    
+    return img
 
 # @numba.jit
-def abs_max_filter_par(img, kernel_size=3):
+def abs_max_filter_par(img, kernel_size=3, cval = 0):
     pad_extra = kernel_size//2
-    img_padded = np.zeros((img.shape[0], img.shape[1] + 2*pad_extra, img.shape[2] + 2*pad_extra))
+    img_padded = np.full((img.shape[0], img.shape[1] + 2*pad_extra, img.shape[2] + 2*pad_extra), cval, dtype=np.float64)
     img_padded[:, pad_extra:img.shape[1] + pad_extra, pad_extra:img.shape[2] + pad_extra] = img
 
-    kernel = np.empty((img.shape[0], kernel_size*kernel_size))
+    kernel = np.empty((img.shape[0], kernel_size**2))
     for row in range(img.shape[1]):
         for col in range(img.shape[2]):
             k_row_start = row
@@ -188,7 +198,7 @@ def abs_max_filter_par(img, kernel_size=3):
             k_col_start = col
             k_col_end = col + kernel_size
 
-            kernel = img_padded[:, k_row_start:k_row_end, k_col_start:k_col_end].copy()
+            kernel = img_padded[:, k_row_start:k_row_end, k_col_start:k_col_end]
 
             kernel_flat = kernel.reshape((img.shape[0], kernel_size**2))
 

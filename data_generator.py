@@ -8,6 +8,9 @@ from tensorflow import keras
 from tensorflow.keras.utils import Sequence, load_img, img_to_array
 import sunpy.map
 import pathlib
+import utils
+
+from skimage.filters import gaussian
 
 
 # https://mahmoudyusof.github.io/facial-keypoint-detection/data-generator/
@@ -139,14 +142,43 @@ class HMImGenerator(SunImgAEGenerator):
         data_matrix[np.isnan(data_matrix)] = nan_fill
 
         return data_matrix
+    
+    @staticmethod
+    def apply_filter(data_matrix, kernel_size=3, sigma=2, cval=0):
+        # gaussian(utils.abs_max_filter(2*x - 1, absmax_size)/2 + 0.5, gauss_sigma)
+
+        data_matrix_norm = 2*data_matrix - 1
+
+        data_matrix_norm = utils.abs_max_filter_par(data_matrix_norm, kernel_size, cval=cval)
+        data_matrix_norm = gaussian(data_matrix_norm, sigma=sigma, channel_axis=0, cval=cval)
+
+        data_matrix = (data_matrix_norm + 1)/2
+
+        return data_matrix
+
+class PolarHMImGenerator(HMImGenerator):    
+    @staticmethod
+    def apply_filter(data_matrix, kernel_size=3, sigma=2, cval=0):
+        data_matrix_c = np.asarray([utils.polar_to_cartesian(img, cval=0.5) for img in data_matrix])
+        data_matrix_c = HMImGenerator.apply_filter(data_matrix_c, kernel_size, sigma, cval)
+        data_matrix = np.asarray([utils.cartesian_to_polar(img) for img in data_matrix_c])
+
+        return data_matrix
+
 
 
 class MultiChannelAEGenerator(SunImgAEGenerator):
+    def __init__(self, directory, batch_size, test_split=0.2, shuffle=True, noise_filter=False, filter_hmi=True, filter_sigma=2.5):
+        super().__init__(directory, batch_size, test_split, shuffle, noise_filter)
+        self.filter_hmi = filter_hmi
+        self.filter_sigma = filter_sigma
+
+
     @staticmethod
     def normalize(data_matrix):
         data_matrix[:,:,:,0] = np.clip(data_matrix[:,:,:,0], 0, 5000)
         data_matrix[:,:,:,1] = np.clip(data_matrix[:,:,:,1], 0, 3000)
-        data_matrix[:,:,:,2] = np.clip(data_matrix[:,:,:,2], -400, 400)
+        data_matrix[:,:,:,2] = np.clip(data_matrix[:,:,:,2], -100, 100)
 
         min_values = np.nanmin(np.nanmin(data_matrix, axis=2, keepdims=True), axis=1, keepdims=True)
         max_values = np.nanmax(np.nanmax(data_matrix, axis=2, keepdims=True), axis=1, keepdims=True)
@@ -159,8 +191,11 @@ class MultiChannelAEGenerator(SunImgAEGenerator):
         # Normalize HMI magnetogram data differently
         hmi_max_values = np.nanmax(np.nanmax(np.abs(data_matrix[:,:,:,2]), axis=2, keepdims=True), axis=1, keepdims=True)
         data_matrix_norm[:,:,:,2] = ((data_matrix[:,:,:,2] / hmi_max_values) + 1)/2
+        
+        hmi_nans = np.isnan(data_matrix_norm[:,:,:,2])
 
         data_matrix_norm[np.isnan(data_matrix_norm)] = 0
+        data_matrix_norm[hmi_nans, 2] = 0.5
 
         return data_matrix_norm   
 
@@ -179,6 +214,9 @@ class MultiChannelAEGenerator(SunImgAEGenerator):
 
         img_matrix = self.normalize(img_matrix)
 
+        if self.filter_hmi:
+            img_matrix[:,:,:,2] = HMImGenerator.apply_filter(img_matrix[:,:,:,2], 4, self.filter_sigma)
+
         return img_matrix
 
     def __getitem__(self, idx):
@@ -195,6 +233,9 @@ class MultiChannelAEGenerator(SunImgAEGenerator):
             img_matrix[idx] = data_point
 
         img_matrix = self.normalize(img_matrix)
+
+        if self.filter_hmi:
+            img_matrix[:,:,:,2] = HMImGenerator.apply_filter(img_matrix[:,:,:,2], 4, self.filter_sigma)
 
         return img_matrix, img_matrix
 
