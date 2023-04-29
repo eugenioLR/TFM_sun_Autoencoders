@@ -11,7 +11,6 @@ from scipy.ndimage import map_coordinates
 
 import tensorflow as tf
 from tensorflow import keras
-import tensorflow_addons as tfa
 
 
 def pearson_mat(matrix, target):
