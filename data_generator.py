@@ -16,18 +16,23 @@ from skimage.filters import gaussian
 # https://mahmoudyusof.github.io/facial-keypoint-detection/data-generator/
 
 class SunImgAEGenerator(tf.keras.utils.Sequence):
-    def __init__(self, directory, batch_size, test_split=0.2, shuffle=True, noise_filter=False):
+    def __init__(self, directory, batch_size, test_split=0.2, shuffle=True, noise_filter=False, bad_file_csv=None):
         self.file_list = list(pathlib.Path(directory).iterdir())
+
+        if noise_filter and bad_file_csv is None:
+            bad_file_csv = "noisy_193A.csv"
 
         # Remove noisy images if the flag is set 
         if noise_filter:
             noise_imgs = []
-            with open("noisy_193A.csv", "r") as f:
+            with open(bad_file_csv, "r") as f:
                 noise_imgs = f.readlines()
             
             noise_imgs = [pathlib.Path(i.strip()).stem for i in noise_imgs]
 
+            print(len(self.file_list))
             self.file_list = [f for f in self.file_list if f.stem not in noise_imgs]
+            print(len(self.file_list))
 
         # Shuffle data if the flag is set
         self.shuffle = shuffle
@@ -168,8 +173,9 @@ class PolarHMImGenerator(HMImGenerator):
 
 
 class MultiChannelAEGenerator(SunImgAEGenerator):
-    def __init__(self, directory, batch_size, test_split=0.2, shuffle=True, noise_filter=False, filter_hmi=True, filter_sigma=2.5):
-        super().__init__(directory, batch_size, test_split, shuffle, noise_filter)
+    def __init__(self, directory, batch_size, test_split=0.2, shuffle=True, noise_filter=False, filter_hmi=False, filter_sigma=2.5):
+        # super().__init__(directory, batch_size, test_split, shuffle, noise_filter, "noisy_3channel.csv")
+        super().__init__(directory, batch_size, test_split, shuffle, noise_filter, "manual_noise.txt")
         self.filter_hmi = filter_hmi
         self.filter_sigma = filter_sigma
 
@@ -195,9 +201,8 @@ class MultiChannelAEGenerator(SunImgAEGenerator):
         hmi_nans = np.isnan(data_matrix_norm[:,:,:,2])
 
         data_matrix_norm[np.isnan(data_matrix_norm)] = 0
-        data_matrix_norm[hmi_nans, 2] = 0.5
 
-        return data_matrix_norm   
+        return data_matrix_norm  
 
     def sample(self, k):
         """
@@ -207,10 +212,10 @@ class MultiChannelAEGenerator(SunImgAEGenerator):
         idx = np.random.permutation(len(self.file_list))[:k]
 
         batch_files = [self.file_list[i] for i in idx]
-        img_matrix = np.empty([len(batch_files), 256, 256, 3])
+        img_matrix = np.empty([len(batch_files), 204, 204, 3])
         for idx, data_file in enumerate(batch_files):
             data_point = np.load(data_file)
-            img_matrix[idx] = data_point
+            img_matrix[idx] = data_point[26:230,26:230] 
 
         img_matrix = self.normalize(img_matrix)
 
@@ -227,10 +232,10 @@ class MultiChannelAEGenerator(SunImgAEGenerator):
         else:
             batch_files = self.test_list[idx * self.batch_size: (idx + 1) * self.batch_size]
 
-        img_matrix = np.empty([len(batch_files), 256, 256, 3])
+        img_matrix = np.empty([len(batch_files), 204, 204, 3])
         for idx, data_file in enumerate(batch_files):
             data_point = np.load(data_file)
-            img_matrix[idx] = data_point
+            img_matrix[idx] = data_point[26:230,26:230]
 
         img_matrix = self.normalize(img_matrix)
 

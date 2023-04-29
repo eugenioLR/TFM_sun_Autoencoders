@@ -7,6 +7,16 @@ from keras import layers
 import utils
 from utils import CylindricalPadding2D
 
+@keras.utils.register_keras_serializable()
+class Sampling(layers.Layer):
+    """Uses (z_mean, z_log_var) to sample z."""
+
+    def call(self, inputs):
+        z_mean, z_log_var = inputs
+        
+        epsilon = tf.keras.backend.random_normal(shape=z_mean.shape)
+        return z_mean + tf.exp(z_log_var) * epsilon
+
 
 def gen_autoenc_model_1c(latent_size, optim="adam", loss="mse", verbose=True):
     input_img = keras.Input(shape=[256,256,1])
@@ -28,6 +38,66 @@ def gen_autoenc_model_1c(latent_size, optim="adam", loss="mse", verbose=True):
     x = layers.Flatten()(x)
     x = layers.Dropout(0.1)(x)
     x = layers.Dense(latent_size, activation="sigmoid")(x)
+    
+    encoded = x
+
+    x = layers.Dropout(0.1)(x)
+    x = layers.Dense(1024, activation="relu")(x)
+    x = layers.Reshape([8, 8, 16])(x)
+
+    x = layers.Conv2D(64, 3, activation="relu", padding='same', strides=1)(x)
+    x = layers.Conv2DTranspose(64, 3, activation="relu", padding='same', strides=2)(x)
+
+    x = layers.Conv2D(64, 3, activation="relu", padding='same', strides=1)(x)
+    x = layers.Conv2DTranspose(64, 3, activation="relu", padding='same', strides=2)(x)
+
+    x = layers.Conv2D(32, 3, activation="relu", padding='same', strides=1)(x)
+    x = layers.Conv2DTranspose(32, 3, activation="relu", padding='same', strides=2)(x)
+
+    x = layers.Conv2D(16, 3, activation="relu", padding='same', strides=1)(x)
+    x = layers.Conv2DTranspose(16, 3, activation="relu", padding='same', strides=2)(x)
+
+    x = layers.Conv2D(16, 3, activation="relu", padding='same', strides=1)(x)
+    x = layers.Conv2DTranspose(1, 3, activation="relu", padding='same', strides=2)(x)
+
+    decoded = x
+
+    encoder = keras.Model(input_img, encoded)
+    decoder = keras.Model(encoded, decoded)
+    autoencoder = keras.Model(input_img, decoder(encoder(input_img)))
+    autoencoder.compile(loss=loss, optimizer=optim, metrics=["mae"])
+
+    if verbose:
+        encoder.summary()
+        decoder.summary()
+        autoencoder.summary()
+    
+    return autoencoder, encoder, decoder
+
+def gen_VAE_model_1c(latent_size, optim="adam", loss="mse", VAE=False, verbose=True):
+    input_img = keras.Input(shape=[256,256,1])
+
+    x = input_img
+
+    x = layers.Conv2D(8, 3, activation="relu", padding='same', strides=1)(x)
+    x = layers.Conv2D(8, 3, activation="relu", padding='same', strides=1)(x)
+    x = layers.MaxPooling2D()(x)
+
+    x = layers.Conv2D(16, 3, activation="relu", padding='same', strides=1)(x)
+    x = layers.Conv2D(16, 3, activation="relu", padding='same', strides=1)(x)
+    x = layers.MaxPooling2D()(x)
+
+    x = layers.Conv2D(32, 3, activation="relu", padding='same', strides=1)(x)
+    x = layers.Conv2D(32, 3, activation="relu", padding='same', strides=1)(x)
+    x = layers.MaxPooling2D()(x)
+
+    x = layers.Flatten()(x)
+
+    z_mean = layers.Dense(latent_size, activation="sigmoid")(x)
+    z_log_var = layers.Dense(latent_size, activation="sigmoid")(x)
+    
+    z = Sampling()([z_mean, z_log_var])
+
 
     encoded = x
 
@@ -52,10 +122,26 @@ def gen_autoenc_model_1c(latent_size, optim="adam", loss="mse", verbose=True):
 
     decoded = x
 
-
-    encoder = keras.Model(input_img, encoded)
+    encoder = keras.Model(input_img, z)
     decoder = keras.Model(encoded, decoded)
     autoencoder = keras.Model(input_img, decoder(encoder(input_img)))
+
+
+    tf.keras.losses.KLDivergence()
+    
+    # Reconstruction loss compares inputs and outputs and tries to minimise the difference
+    r_loss = original_dim * keras.losses.mse(visible, outpt)  # use MSE
+
+    # KL divergence loss compares the encoded latent distribution Z with standard Normal distribution and penalizes if it's too different
+    kl_loss =  -0.5 * K.sum(1 + z_log_sigma - K.square(z_mean) - K.exp(z_log_sigma), axis = 1)
+
+    # The VAE loss is a combination of reconstruction loss and KL loss
+    vae_loss = K.mean(r_loss + kl_loss)
+
+    # Add loss to the model and compile it
+    vae.add_loss(vae_loss)
+    vae.compile(optimizer='adam')
+
     autoencoder.compile(loss=loss, optimizer=optim, metrics=["mae"])
 
     if verbose:
@@ -64,6 +150,7 @@ def gen_autoenc_model_1c(latent_size, optim="adam", loss="mse", verbose=True):
         autoencoder.summary()
     
     return autoencoder, encoder, decoder
+
 
 
 def gen_xception_autoenc_polar_3c(latent_size, optim="adam", loss="mse", cylindical=True, verbose=True):
@@ -216,7 +303,7 @@ def gen_xception_autoenc_polar_3c(latent_size, optim="adam", loss="mse", cylindi
     return autoencoder, encoder, decoder
 
 def gen_xception_autoenc_3c(latent_size, optim="adam", loss="mse", cylindical=True, verbose=True):
-    input_img = keras.Input(shape=[256,256,3])
+    input_img = keras.Input(shape=[204,204,3])
 
     channel_axis = -1
 
@@ -343,6 +430,8 @@ def gen_xception_autoenc_3c(latent_size, optim="adam", loss="mse", cylindical=Tr
     x = layers.Conv2DTranspose(3, 3, activation="relu", padding='same', strides=2)(x)
 
     x = layers.Conv2D(3, 3, activation="tanh", padding='same', strides=1)(x)
+    
+    x = layers.Cropping2D(((26,26),(26,26)))(x)
 
     decoded = x
 
