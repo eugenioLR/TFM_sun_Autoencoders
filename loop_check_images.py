@@ -36,7 +36,7 @@ noisy = []
 
 # start = 3500
 # start = [i.as_posix() for i in data_gen.file_list].index("data/composite_data/2019-02-15T02-30-14.npy")-1
-start = [i.as_posix() for i in data_gen.file_list].index("data/composite_data/2015-05-14T01-31-14.npy")
+start = [i.as_posix() for i in data_gen.file_list].index("data/composite_data/2020-03-17T07-55-03.npy")
 
 
 #data/composite_data/2012-12-06T22-31-43.npy ????
@@ -56,10 +56,10 @@ for idx, data_point in enumerate(data_gen):
         key = getch.getch()
 
     if key == 'e':
-        print(f"Noise detected in file {data_gen.file_list[idx]}")
+        print(f"- Noise detected in file {data_gen.file_list[idx]}")
         noisy.append(data_gen.file_list[idx])
     elif key == 'w':
-        print("No noise")
+        print(f"+ No noise in file {data_gen.file_list[idx]}")
     elif key == 'p':
         print(f"Stopped. Last image: {data_gen.file_list[idx]}")
         break
