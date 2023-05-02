@@ -36,7 +36,8 @@ noisy = []
 
 # start = 3500
 # start = [i.as_posix() for i in data_gen.file_list].index("data/composite_data/2019-02-15T02-30-14.npy")-1
-start = [i.as_posix() for i in data_gen.file_list].index("data/composite_data/2020-03-17T07-55-03.npy")
+# start = [i.as_posix() for i in data_gen.file_list].index("data/composite_data/2020-03-17T07-55-03.npy")
+start = 0
 
 
 #data/composite_data/2012-12-06T22-31-43.npy ????

@@ -26,13 +26,14 @@ from keras import layers
 import autoenc_model as aem
 import data_generator as dg
 import utils
+import datetime
 
 import json
 
 batch_size = 48
-gen_input = dg.MultiChannelAEGenerator("data/composite_data/", batch_size, test_split=0.15, shuffle=True, noise_filter=True)
+gen_input = dg.MultiChannelAEGenerator("data/composite_data/", batch_size, test_split=0.2, shuffle=False, noise_filter=True)
 
-latent_size = 1024
+latent_size = 768
 optimizer = keras.optimizers.RMSprop(learning_rate=0.001)
 
 loss_fn = "mse"
@@ -40,7 +41,7 @@ loss_fn = "mse"
 autoencoder, encoder, decoder = aem.gen_xception_autoenc_3c(latent_size, optim=optimizer, loss=loss_fn)
 
 
-n_epochs = 500
+n_epochs = 200
 
 history = autoencoder.fit(gen_input, epochs=n_epochs)
 
@@ -49,6 +50,6 @@ json_history_str = json.dumps(history.history)
 with open("AE_xception_full.json", "w") as j:
     j.write(json_history_str)
 
-autoencoder.save("autoencoder_xception.h5")
-encoder.save("encoder_xception.h5")
-decoder.save("decoder_xception.h5")
+autoencoder.save(f"autoencoder_{latent_size}_xception.h5")
+encoder.save(f"encoder_{latent_size}_xception.h5")
+decoder.save(f"decoder_{latent_size}_xception.h5")
