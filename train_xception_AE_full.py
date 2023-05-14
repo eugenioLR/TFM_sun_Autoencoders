@@ -30,26 +30,32 @@ import datetime
 
 import json
 
-batch_size = 48
+batch_size = 25
 gen_input = dg.MultiChannelAEGenerator("data/composite_data/", batch_size, test_split=0.2, shuffle=False, noise_filter=True)
+val_gen_input = dg.MultiChannelAEGenerator("data/composite_data/", batch_size, test_split=0.2, shuffle=False, noise_filter=True)
+
+val_cut_point = int(len(gen_input.train_list)*0.15)
+val_gen_input.train_list = gen_input.train_list[:val_cut_point]
+gen_input.train_list = gen_input.train_list[val_cut_point:]
+
 
 latent_size = 768
-optimizer = keras.optimizers.RMSprop(learning_rate=0.001)
+optimizer = keras.optimizers.RMSprop(learning_rate=0.0002, clipnorm=20000)
 
 loss_fn = "mse"
 
-autoencoder, encoder, decoder = aem.gen_xception_autoenc_3c(latent_size, optim=optimizer, loss=loss_fn)
+autoencoder, encoder, decoder = aem.gen_xception_VAE_3c(latent_size, optim=optimizer, loss=loss_fn)
 
 
-n_epochs = 200
+n_epochs = 150
 
-history = autoencoder.fit(gen_input, epochs=n_epochs)
+history = autoencoder.fit(gen_input, validation_data=val_gen_input, epochs=n_epochs)
 
 
 json_history_str = json.dumps(history.history)
-with open("AE_xception_full.json", "w") as j:
+with open("VAE_xception_full.json", "w") as j:
     j.write(json_history_str)
 
-autoencoder.save(f"autoencoder_{latent_size}_xception.h5")
-encoder.save(f"encoder_{latent_size}_xception.h5")
-decoder.save(f"decoder_{latent_size}_xception.h5")
+autoencoder.save(f"autoencoder_VAE_{latent_size}_xception.h5")
+encoder.save(f"encoder_VAE_{latent_size}_xception.h5")
+decoder.save(f"decoder_VAE_{latent_size}_xception.h5")
