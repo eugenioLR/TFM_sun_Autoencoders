@@ -47,6 +47,7 @@ class SunImgAEGenerator(tf.keras.utils.Sequence):
         self.batch_size = batch_size
         self.training = True
         self.take_all = False
+
     
     @staticmethod
     def normalize(data_matrix):
@@ -175,7 +176,7 @@ class PolarHMImGenerator(HMImGenerator):
 class MultiChannelAEGenerator(SunImgAEGenerator):
     def __init__(self, directory, batch_size, test_split=0.2, shuffle=True, noise_filter=False, filter_hmi=False, filter_sigma=2.5):
         # super().__init__(directory, batch_size, test_split, shuffle, noise_filter, "noisy_3channel.csv")
-        super().__init__(directory, batch_size, test_split, shuffle, noise_filter, "manual_noise.txt")
+        super().__init__(directory, batch_size, test_split, shuffle, noise_filter, bad_file_csv="manual_noise.txt")
         self.filter_hmi = filter_hmi
         self.filter_sigma = filter_sigma
 
