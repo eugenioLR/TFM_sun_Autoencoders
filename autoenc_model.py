@@ -563,7 +563,7 @@ def gen_xception_VAE_3c(latent_size, optim="adam", loss="mse", cylindical=True, 
 
     x = layers.GlobalAveragePooling2D()(x)
     
-    encoded = layers.Dense(latent_size, activation="sigmoid")(x)
+    x = layers.Dense(latent_size, activation="sigmoid")(x)
 
     # Define the mean and variance layers
     z_mean = layers.Dense(latent_size)(x)
