@@ -9,6 +9,7 @@ from tensorflow.keras.utils import Sequence, load_img, img_to_array
 import sunpy.map
 import pathlib
 import utils
+import datetime
 
 from skimage.filters import gaussian
 
@@ -18,6 +19,9 @@ from skimage.filters import gaussian
 class SunImgAEGenerator(tf.keras.utils.Sequence):
     def __init__(self, directory, batch_size, test_split=0.2, shuffle=True, noise_filter=False, bad_file_csv=None):
         self.file_list = list(pathlib.Path(directory).iterdir())
+        dates = [datetime.datetime.strptime(f_name.stem, "%Y-%m-%dT%H-%M-%S") for f_name in self.file_list]
+        zipped_files = sorted(zip(self.file_list, dates), key=lambda x: x[1])
+        self.file_list = [i[0] for i in zipped_files]
 
         if noise_filter and bad_file_csv is None:
             bad_file_csv = "noisy_193A.csv"
