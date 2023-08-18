@@ -1,5 +1,5 @@
 import numpy as np
-import sympy
+import math
 
 import astropy
 import astropy.units as u
@@ -146,8 +146,18 @@ def linear_to_polar_tf(img_input, radius):
     return out_image
 
 
+def ceil_sqrt(n):
+    return 1 + math.isqrt(n-1)
+
+def divisors(n):
+    div_list = set([1, n])
+    for i in range(2, ceil_sqrt(n)+1):
+        if n % i == 0:
+            div_list = div_list.union((i, n//i))
+    return list(div_list)
+
 def sqauare_dims(size, ratio_w_h=1):
-    divs = np.array(sympy.divisors(size))
+    divs = np.array(divisors(size))
     dist_to_root = np.abs(divs-np.sqrt(size)*ratio_w_h)
     i = np.argmin(dist_to_root)
     x_size = int(divs[i])
